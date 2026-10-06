@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Composer cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ hashFiles('**/composer.json') }}
+          restore-keys: |
+            composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Lint PHP files
+        run: find src public -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Smoke test
+        run: |
+          php -S 127.0.0.1:8080 -t public &
+          sleep 2
+          curl -fsS http://127.0.0.1:8080/
+          curl -fsS -X POST http://127.0.0.1:8080/bookmarks -H 'Content-Type: application/json' -d '{"title":"Example","url":"https://example.com"}'
+          curl -fsS http://127.0.0.1:8080/bookmarks
